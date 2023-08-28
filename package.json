@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^11.1.2",
+    "mathjs": "^11.10.0",
+    "peerjs": "^1.4.7",
+    "tslib": "^2.6.2"
+  }
+}

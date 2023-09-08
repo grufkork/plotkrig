@@ -138,7 +138,9 @@
         projectileType: document.getElementById("projectileType"),
         fuseSpan: document.getElementById("fuseSpan"),
         fuseInput: document.getElementById("fuseInput"),
-        regenerateMap: document.getElementById("newMap")
+        regenerateMap: document.getElementById("newMap"),
+        backToLobby: document.getElementById("backToLobby"),
+        adminControls: document.getElementById("adminControls")
     };
     elms.roomname.value = "testroom";
     if (window.location.search == "") {
@@ -514,6 +516,7 @@
                 elms.start.style.display = "block";
                 // Server code
                 peer.on("connection", (con) => {
+                    console.log("state", state);
                     con.on("data", (d) => {
                         let data = d;
                         console.log("Received>", data);
@@ -526,10 +529,18 @@
                             case "status":
                                 switch (data.d) {
                                     case "opened":
-                                        let temp = Object.keys(clients);
-                                        temp.splice(0, 0, elms.username.value);
-                                        broadcast("plist", temp);
-                                        elms.playerlist.innerHTML = temp.join("<br>");
+                                        if (state != "connecting") {
+                                            console.log("Booting");
+                                            con.send("gameInProgress");
+                                            con.close();
+                                            return;
+                                        }
+                                        else {
+                                            let temp = Object.keys(clients);
+                                            temp.splice(0, 0, elms.username.value);
+                                            broadcast("plist", temp);
+                                            elms.playerlist.innerHTML = temp.join("<br>");
+                                        }
                                         break;
                                     case "terrainLoaded":
                                         clients[con.label].readyState = ReadyState.placing;
@@ -555,7 +566,7 @@
                                 }
                                 break;
                             case "positionChange":
-                                if (clients[con.label].readyState == 1 && state == "placing") {
+                                if (clients[con.label].readyState == ReadyState.placing && state == "placing") {
                                     setPosition(data.d, con.label);
                                 }
                                 break;
@@ -588,12 +599,18 @@
                 conn.on("data", d => {
                     let data = d;
                     console.log("Receive>", data);
+                    // Register handlers
                     switch (data.t) {
                         case "plist":
                             elms.playerlist.innerHTML = data.d.join("<br>");
                             break;
                         case "state":
                             switch (data.d) {
+                                case "lobby":
+                                    setStatus("Connected", false);
+                                    elms.lobby.style.display = "block";
+                                    elms.game.style.display = "none";
+                                    break;
                                 case "pregame":
                                     setStatus("Starting game, loading data...", false);
                                     state = "pregame";
@@ -606,6 +623,7 @@
                                     setStatus("Pick starting point", false);
                                     state = "placing";
                                     elms.pregameControls.style.display = "block";
+                                    elms.gameControls.style.display = "none";
                                     break;
                                 case "running":
                                     setStatus("Running", false);
@@ -667,6 +685,11 @@
                             targets = data.d;
                             redraw = true;
                             break;
+                        case "gameInProgress":
+                            elms.login.style.display = "block";
+                            elms.lobby.style.display = "none";
+                            setStatus("Game already in progress!", true);
+                            break;
                         default:
                             console.log("Unknown message type>", data.t);
                             break;
@@ -681,10 +704,11 @@
                 });
                 conn.on("error", e => {
                     setStatus("Error: " + e, true);
-                    console.log(e);
+                    console.error(e);
                 });
                 conn.on("close", () => {
                     setStatus("DISCONNECTED", true);
+                    state = "disconnected";
                     console.log("Closed");
                 });
             }
@@ -731,8 +755,9 @@
                 broadcast("state", "pregame");
                 setStatus("Starting game...", false);
                 setTeams();
-                elms.regenerateMap.style.display = "block";
+                elms.adminControls.style.display = "block";
                 elms.pregameControls.style.display = "block";
+                elms.gameControls.style.display = "none";
                 targets = [];
                 serverClient.ready = false;
                 for (let id in clients) {
@@ -749,15 +774,22 @@
                 names.push(elms.username.value);
                 let i = Math.round(Math.random());
                 shuffle(names).forEach((name) => {
+                    let teamIndex = i % 2;
+                    let teamFromName = parseInt(name[0]);
+                    if (teamFromName == 1 || teamFromName == 2) {
+                        teamIndex = teamFromName - 1;
+                    }
+                    else {
+                        i++;
+                    }
                     players[name] = {
                         y: (Math.random() - 0.5) * cfg.h / cfg.scale,
                         x: cfg.w / cfg.scale / 2 - 0.5 - Math.random(),
-                        team: i % 2,
+                        team: teamIndex,
                         alive: true
                     };
-                    if (i % 2 == 0)
+                    if (teamIndex == 1)
                         players[name].x *= -1;
-                    i++;
                 });
                 redraw = true;
                 state = "pregame";
@@ -874,7 +906,7 @@
         if (cost.cost == null)
             return;
         if (elms.isServer.checked) {
-            if (teams[players[name].team].money < cost.cost)
+            if (teams[players[name].team].money < cost.cost || !players[name].alive)
                 return;
             teams[players[name].team].money -= cost.cost;
             updateTeams();
@@ -1139,6 +1171,15 @@
         }
     };
     elms.regenerateMap.onclick = start;
+    elms.backToLobby.onclick = () => {
+        elms.game.style.display = "none";
+        elms.lobby.style.display = "block";
+        state = "connecting";
+        broadcast("state", "lobby");
+        for (let i in clients) {
+            clients[i].readyState = ReadyState.loading;
+        }
+    };
     elms.fire.onclick = firePressed;
     elms.lengthInput.onchange = updateCost;
     elms.projectileType.onchange = () => {

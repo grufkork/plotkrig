@@ -26,10 +26,8 @@ var cfg = {
     playerSizeSquared: -1,
     economy: {
         giveInterval: 2000,
-        //initialCap: 7, //100
-        initialCap: 100,
-        //initialCurrencyPerTick: 0.5, //20
-        initialCurrencyPerTick: 20, //20
+        initialCap: 7, //100
+        initialCurrencyPerTick: 0.5, //20
         displayPrecision: 1000,
         generationIncrease: {
             interval: 1000 * 60 * 2,
